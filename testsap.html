@@ -1,0 +1,67 @@
+
+<title>Sapling Key Conversion</title>
+<body>
+<pre><b>Sapling Key Generator</b>
+Enter at least 64 hex characters below as a seed value to generate a new private key, or <a href='javascript:genSeed()'>click here for a random one</a>.
+
+<input type='text' id='seed' autocomplete='off' oninput='generate()' onclick='this.select()' placeholder='Random hex seed to generate a new key' style='width:100%; font-family: Courier New,monospace;' maxlength=64 autofocus>
+<span id="generated"></span>
+=================
+
+<b>Sapling Key Conversion</b>
+Enter a valid key starting with one of these prefixes: secret-extended-key-(main/test), zxview(s/testsapling), zview(s/testsapling)
+If the key is valid, you'll see displayed:
+- inkey (the input value)
+- key_type (s for production or testsapling for testnet)
+- ivk (incoming view key as defined in the protocol) - what I'd use on a merchant gateway to generate custom addresses/check for incoming payments
+- view (full viewing key as defined in the protocol)
+if you entered a secret or zxviews key you'll also see:
+- ivkdk (incoming view key + diversifier key, my own custom format I use when generating addresses that match those from the client. format is just bech32 HRP: zivk(s/testsapling)dk; data: [32 byte IVK][32 byte dk])
+- zxviews (ZIP32 defined extended viewing key)</pre>
+<input type='text' id='inkey' autocomplete='off' oninput='conv()' onclick='this.select()' placeholder='Enter a sapling bech32 key starting with secret-extended-key-(main/test), zxview(s/testsapling), zview(s/testsapling)' style='width:100%; font-family: Courier New,monospace;' maxlength=305 autofocus>
+<pre id="state"></pre>
+<pre id="output"></pre>
+<script type='text/javascript' src='blake2s.js'></script>
+<script type='text/javascript' src='blake2b.js'></script>
+<script type='text/javascript' src='bech32.js'></script>
+<script type='text/javascript' src='sapling.js'></script>
+<script type='text/javascript'>
+function generate(){
+	derive = Sapling.deriveMaster(document.getElementById("seed").value);
+	if(derive) document.getElementById("generated").innerHTML = "\n    Generated: <a href='#" + derive.bech32 + "' onclick='setTimeout(location.reload.bind(location), 1)'>" + derive.bech32 + "</a>\n";
+	else document.getElementById("generated").innerHTML = "";
+}
+function conv(){
+	window.location.hash = '#' + document.getElementById("inkey").value.trim();
+	decode = Sapling.encode(document.getElementById("inkey").value.trim());
+	if(typeof decode === 'string') document.getElementById("state").innerHTML = "enter a valid key above; " + decode;
+	else{
+		document.getElementById("state").innerHTML = "=================";
+		document.getElementById("output").innerHTML = "success! updated for " + decode['inkey'] + "\n\n";
+		for(var key in decode) document.getElementById("output").innerHTML += '<b>' + key + ':</b> ' + decode[key] + "\n";
+		if(decode['chaincode']){
+			document.getElementById("output").innerHTML += "\n -> Derive child key with index: <input type='number' id='index' min='0' max='2147483643' oninput='child()'>";
+			if(Sapling.zip32_isPrivate) document.getElementById("output").innerHTML += "<input type='checkbox' id='harden' value='true' onclick='child()'>(hardened derivation)";
+			else document.getElementById("output").innerHTML += "<input type='hidden' id='harden' value='false'>";
+			document.getElementById("output").innerHTML += "\n<span id='child'></span>";
+		}
+	}
+}
+function child(){
+	if(!document.getElementById("index").value || document.getElementById("index").value < 0) document.getElementById("index").value = 0;
+	derive = Sapling.deriveChild(document.getElementById("index").value, document.getElementById("harden").checked);
+	document.getElementById("child").innerHTML = "    Selected index " + document.getElementById("index").value + " and harden path: " + document.getElementById("harden").checked + "\n";
+	if(!derive) document.getElementById("child").innerHTML += "    <b>Error in derivation</b>";
+	else document.getElementById("child").innerHTML += "    <a href='#" + derive.bech32 + "' onclick='setTimeout(location.reload.bind(location), 1)'>" + derive.bech32 + "</a>";
+}
+function genSeed(len = 64) {
+    let output = '';
+    for (let i = 0; i < len; ++i) {
+        output += (Math.floor(Math.random() * 16)).toString(16);
+    }
+    document.getElementById("seed").value = output;
+	generate();
+}
+if(window.location.hash){ document.getElementById('inkey').value=window.location.hash.substring(1); conv(); }
+</script>
+</body>
